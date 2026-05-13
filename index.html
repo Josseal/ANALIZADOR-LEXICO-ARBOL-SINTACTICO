@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analizador Lexico</title>
+    <style>
+        :root {
+            --bg-0: #090c13;
+            --bg-1: #11182a;
+            --bg-2: #151f34;
+            --card: rgba(17, 24, 42, 0.72);
+            --card-2: rgba(22, 31, 52, 0.86);
+            --ink: #edf2ff;
+            --muted: #9aa8c7;
+            --edge: rgba(151, 175, 227, 0.24);
+            --accent: #38d2c3;
+            --accent-2: #58a8ff;
+            --accent-3: #ff9e57;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--ink);
+            font-family: "Outfit", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 14% 18%, rgba(56, 210, 195, 0.14), transparent 35%),
+                radial-gradient(circle at 86% 80%, rgba(88, 168, 255, 0.18), transparent 40%),
+                linear-gradient(160deg, var(--bg-0), var(--bg-1) 46%, var(--bg-2));
+            padding: 18px;
+            overflow-x: hidden;
+        }
+
+        .fondo-glow {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.05) 0.7px, transparent 0.7px);
+            background-size: 9px 9px;
+            opacity: 0.28;
+        }
+
+        .contenedor {
+            max-width: 1520px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero {
+            border: 1px solid var(--edge);
+            background: var(--card);
+            backdrop-filter: blur(12px);
+            border-radius: 22px;
+            padding: 20px;
+            box-shadow: 0 20px 44px rgba(4, 8, 15, 0.5);
+            animation: enter 0.55s ease both;
+        }
+
+        .titulo {
+            margin: 0;
+            font-family: "Sora", "Segoe UI", sans-serif;
+            font-weight: 800;
+            font-size: clamp(1.6rem, 3vw, 2.7rem);
+            letter-spacing: 0.2px;
+            line-height: 1.1;
+        }
+
+        .sub {
+            margin: 10px 0 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .grid {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr 1.15fr;
+            gap: 12px;
+            align-items: start;
+        }
+
+        .panel {
+            border: 1px solid var(--edge);
+            border-radius: 18px;
+            background: var(--card-2);
+            padding: 14px;
+            box-shadow: 0 12px 24px rgba(4, 8, 15, 0.35);
+            animation: enter 0.45s ease both;
+            min-height: 74vh;
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .panel-title {
+            margin: 0;
+            font-family: "Sora", "Segoe UI", sans-serif;
+            font-size: 1.1rem;
+        }
+
+        .tag {
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 0.8rem;
+            color: #d8e6ff;
+            background: rgba(88, 168, 255, 0.16);
+            border: 1px solid rgba(88, 168, 255, 0.35);
+            padding: 5px 8px;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 265px;
+            border-radius: 14px;
+            border: 1px solid var(--edge);
+            background: rgba(11, 17, 31, 0.88);
+            color: #f2f6ff;
+            padding: 14px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 14.5px;
+            line-height: 1.45;
+            resize: vertical;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: rgba(56, 210, 195, 0.72);
+            box-shadow: 0 0 0 4px rgba(56, 210, 195, 0.12);
+        }
+
+        .barra-acciones {
+            margin-top: 11px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+        }
+
+        button {
+            border: none;
+            border-radius: 11px;
+            padding: 10px 15px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .btn-analizar {
+            color: #031816;
+            background: linear-gradient(120deg, var(--accent), #95f3e5);
+            box-shadow: 0 10px 20px rgba(56, 210, 195, 0.28);
+        }
+
+        .btn-limpiar {
+            color: #f5f8ff;
+            background: linear-gradient(120deg, #34466e, #47639e);
+            box-shadow: 0 10px 20px rgba(41, 66, 119, 0.32);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 9px;
+            margin-bottom: 10px;
+        }
+
+        .stat {
+            border: 1px solid var(--edge);
+            border-radius: 12px;
+            background: rgba(11, 17, 31, 0.65);
+            padding: 10px;
+        }
+
+        .stat-label {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.78rem;
+        }
+
+        .stat-num {
+            margin: 4px 0 0;
+            font-family: "Sora", "Segoe UI", sans-serif;
+            font-size: 1.35rem;
+            font-weight: 700;
+        }
+
+        .resultados {
+            margin-top: 4px;
+            max-height: 62vh;
+            overflow: auto;
+            display: grid;
+            gap: 8px;
+            padding-right: 3px;
+        }
+
+        .subpanel {
+            border: 1px solid var(--edge);
+            border-radius: 12px;
+            padding: 10px;
+            background: rgba(11, 17, 31, 0.55);
+        }
+
+        .subpanel-titulo {
+            margin: 0 0 8px;
+            font-family: "Sora", "Segoe UI", sans-serif;
+            font-size: 0.95rem;
+        }
+
+        .arbol-wrap {
+            margin-top: 8px;
+            height: 62vh;
+            overflow: hidden;
+            border: 1px solid rgba(151, 175, 227, 0.2);
+            border-radius: 12px;
+            background: rgba(9, 14, 27, 0.52);
+            position: relative;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .arbol-wrap.arrastrando {
+            cursor: grabbing;
+        }
+
+        .arbol-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            will-change: transform;
+            padding: 8px 16px;
+            min-width: max-content;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .arbol-toolbar {
+            display: flex;
+            gap: 6px;
+            margin: 8px 0 4px;
+        }
+
+        .zoom-btn {
+            border: 1px solid var(--edge);
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 0.76rem;
+            color: #eaf1ff;
+            background: rgba(25, 35, 59, 0.85);
+            cursor: pointer;
+        }
+
+        .zoom-btn:hover {
+            border-color: rgba(88, 168, 255, 0.45);
+            background: rgba(35, 49, 80, 0.95);
+        }
+
+        /* Tree node layout */
+        .tn {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 1; /* above the SVG connectors */
+            text-align: center;
+            margin: 6px 0;
+        }
+
+        /* Hide the previous CSS-based connectors (we'll draw diagonals with SVG) */
+        .tn-stem,
+        .tn-kid::before,
+        .tn-kid::after {
+            display: none !important;
+        }
+
+        /* Children are laid out horizontally under their parent, forming tree levels */
+        .tn-kids {
+            display: flex;
+            flex-direction: row;
+            gap: 24px;
+            position: relative;
+            align-items: flex-start;
+            margin-top: 10px;
+        }
+
+        .tn-kid {
+            position: relative;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 8px;
+        }
+
+        /* SVG connectors container */
+        .arbol-canvas svg.connectors {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: visible;
+        }
+
+        .fin-global-wrap {
+            margin: 16px auto 0;
+            display: inline-grid;
+            justify-items: center;
+            width: max-content;
+        }
+
+        .fin-global-ramas {
+            display: flex;
+            gap: 18px;
+            align-items: flex-start;
+            width: max-content;
+        }
+
+        .fin-global-rama {
+            width: 2px;
+            height: 12px;
+            background: linear-gradient(to bottom, rgba(151, 175, 227, 0.5), rgba(151, 175, 227, 0.25));
+        }
+
+        .fin-global-barra {
+            width: calc(100% - 10px);
+            min-width: 28px;
+            height: 2px;
+            border-radius: 999px;
+            background: rgba(151, 175, 227, 0.4);
+        }
+
+        .fin-global-tallo {
+            width: 2px;
+            height: 14px;
+            background: linear-gradient(to bottom, rgba(151, 175, 227, 0.42), rgba(151, 175, 227, 0.18));
+        }
+
+        .fin-global-wrap.simple .fin-global-ramas,
+        .fin-global-wrap.simple .fin-global-barra {
+            display: none;
+        }
+
+        .nodo-fin {
+            border-color: rgba(181, 194, 219, 0.5);
+            background: rgba(33, 40, 57, 0.85);
+            color: #d9e2f7;
+            font-size: 0.74rem;
+            letter-spacing: 0.3px;
+            text-transform: lowercase;
+            padding: 3px 9px;
+        }
+
+        .nodo-c {
+            border: 1px solid var(--edge);
+            background: rgba(9, 14, 27, 0.88);
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 0.8rem;
+            color: #f0f4ff;
+        }
+
+        .nodo-c.role-reservada {
+            border-color: rgba(83, 165, 255, 0.65);
+            background: rgba(26, 54, 88, 0.75);
+            color: #dbeeff;
+        }
+
+        .nodo-c.role-identificador {
+            border-color: rgba(86, 211, 175, 0.6);
+            background: rgba(16, 62, 54, 0.72);
+            color: #d9fff2;
+        }
+
+        .nodo-c.role-operador {
+            border-color: rgba(255, 171, 104, 0.65);
+            background: rgba(77, 43, 20, 0.78);
+            color: #ffe8d2;
+            font-weight: 700;
+        }
+
+        .nodo-c.role-literal {
+            border-color: rgba(214, 134, 255, 0.6);
+            background: rgba(64, 33, 92, 0.76);
+            color: #f0deff;
+        }
+
+        .nodo-c.role-delimitador {
+            border-color: rgba(181, 194, 219, 0.6);
+            background: rgba(42, 48, 63, 0.8);
+            color: #e9eefb;
+        }
+
+        .leyenda {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .leyenda-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 0.73rem;
+            color: var(--muted);
+        }
+
+        .leyenda-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dot-reservada   { background: #53a5ff; }
+        .dot-identificador { background: #56d3af; }
+        .dot-operador    { background: #ffab68; }
+        .dot-literal     { background: #d686ff; }
+        .dot-delimitador { background: #b5c2db; }
+
+        .nodo-error {
+            border: 1px solid rgba(255, 120, 120, 0.55);
+            background: rgba(94, 27, 35, 0.72);
+            color: #ffd0d4;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 0.8rem;
+        }
+
+        .token {
+            border: 1px solid var(--edge);
+            border-left: 4px solid rgba(255, 158, 87, 0.66);
+            border-radius: 11px;
+            background: rgba(11, 17, 31, 0.74);
+            padding: 10px 12px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 0.88rem;
+            opacity: 0;
+            transform: translateY(4px);
+            animation: rise 0.28s ease forwards;
+            animation-delay: var(--delay, 0s);
+        }
+
+        .token:nth-child(even) {
+            border-left-color: rgba(56, 210, 195, 0.68);
+        }
+
+        .token-linea {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .token-lexema {
+            color: #f4f7ff;
+            font-weight: 700;
+            word-break: break-word;
+        }
+
+        .token-tipo {
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .token-formato {
+            margin-top: 5px;
+            color: #bfd0ef;
+            opacity: 0.82;
+            word-break: break-word;
+        }
+
+        .arbol-texto {
+            margin: 0;
+            padding: 14px 16px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 0.9rem;
+            line-height: 1.55;
+            color: #eef4ff;
+            white-space: pre;
+            overflow: auto;
+        }
+
+        .vacio {
+            margin: 0;
+            color: var(--muted);
+            font-style: italic;
+        }
+
+        @keyframes enter {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes rise {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 920px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 700px) {
+            body {
+                padding: 12px;
+            }
+
+            .hero,
+            .panel {
+                border-radius: 14px;
+            }
+
+            .stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            textarea {
+                min-height: 205px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="fondo-glow"></div>
+    <main class="contenedor">
+        <section class="hero">
+            <h1 class="titulo">Analizador Lexico</h1>
+            <p class="sub">Escribe tu codigo, analiza y revisa tokens en formato exacto <span class="tag">&lt;'lexema', tipo&gt;</span></p>
+        </section>
+
+        <section class="grid">
+            <article class="panel">
+                <div class="panel-head">
+                    <h2 class="panel-title">Editor</h2>
+                </div>
+
+                <form method="post" id="form-analizador">
+                    <textarea id="texto" name="texto" placeholder="Ejemplo:\n\tvalor = 3.14\nif valor >= 3:\n\tprint('ok')">{{ texto }}</textarea>
+                    <div class="barra-acciones">
+                        <button class="btn-analizar" type="submit">Analizar</button>
+                        <button class="btn-limpiar" type="button" onclick="window.location.href='/'">Limpiar</button>
+                    </div>
+                </form>
+            </article>
+
+            <article class="panel">
+                <div class="panel-head">
+                    <h2 class="panel-title">Resultado Lexico</h2>
+                    <span class="tag">&lt;'lexema', tipo&gt;</span>
+                </div>
+
+                <div class="stats">
+                    <div class="stat">
+                        <p class="stat-label">Tokens</p>
+                        <p class="stat-num">{{ salida|length }}</p>
+                    </div>
+                    <div class="stat">
+                        <p class="stat-label">Lineas</p>
+                        <p class="stat-num">{{ texto.count('\n') + 1 if texto else 0 }}</p>
+                    </div>
+                    <div class="stat">
+                        <p class="stat-label">Caracteres</p>
+                        <p class="stat-num">{{ texto|length }}</p>
+                    </div>
+                    <div class="stat">
+                        <p class="stat-label">Estado</p>
+                        <p class="stat-num">{{ "Listo" if salida else "Espera" }}</p>
+                    </div>
+                </div>
+                <div class="resultados">
+                    {% if salida %}
+                        {% for token in salida %}
+                        <div class="token" data-delay="{{ loop.index0 }}">
+                            <div class="token-linea">
+                                <span class="token-lexema">{{ token.lexema }}</span>
+                                <span class="token-tipo">{{ token.tipo }}</span>
+                            </div>
+                            <div class="token-formato">{{ token.texto }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <p class="vacio">Todavia no hay tokens para mostrar.</p>
+                    {% endif %}
+                </div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-head">
+                    <h2 class="panel-title">Arbol Sintactico</h2>
+                    <span class="tag">Arrastra + zoom</span>
+                </div>
+
+                <div class="leyenda">
+                    <span class="leyenda-item"><span class="leyenda-dot dot-reservada"></span>Reservada</span>
+                    <span class="leyenda-item"><span class="leyenda-dot dot-identificador"></span>Identificador</span>
+                    <span class="leyenda-item"><span class="leyenda-dot dot-operador"></span>Operador</span>
+                    <span class="leyenda-item"><span class="leyenda-dot dot-literal"></span>Literal</span>
+                    <span class="leyenda-item"><span class="leyenda-dot dot-delimitador"></span>Delimitador</span>
+                </div>
+
+                <div class="arbol-wrap" id="arbol-wrap">
+                    <div class="arbol-canvas" id="arbol-canvas">
+                        {% if arbol_texto %}
+                                    {% if arbol_texto %}
+                <img src="{{ arbol_texto }}" alt="Árbol de sintaxis">
+            {% endif %}
+                        {% else %}
+                        <p class="vacio">Todavia no hay arbol para mostrar.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <script>
+        const area = document.getElementById("texto");
+
+        function insertarTab() {
+            const inicio = area.selectionStart;
+            const fin = area.selectionEnd;
+            const textoActual = area.value;
+
+            area.value = textoActual.slice(0, inicio) + "\t" + textoActual.slice(fin);
+            area.selectionStart = area.selectionEnd = inicio + 1;
+            area.focus();
+        }
+
+        area.addEventListener("keydown", function (evento) {
+            if (evento.key === "Tab") {
+                evento.preventDefault();
+                insertarTab();
+            }
+        });
+
+        function initTokenDelays(root=document) {
+            const tokens = (root || document).querySelectorAll(".token[data-delay]");
+            tokens.forEach(function (token) {
+                const indice = Number(token.dataset.delay || "0");
+                token.style.setProperty("--delay", (indice * 0.02) + "s");
+            });
+        }
+        initTokenDelays();
+
+        const arbolWrap = document.getElementById("arbol-wrap");
+        let arbolCanvas = document.getElementById("arbol-canvas");
+        const btnZoomIn = document.getElementById("zoom-in");
+        const btnZoomOut = document.getElementById("zoom-out");
+        const btnZoomReset = document.getElementById("zoom-reset");
+
+        if (arbolWrap && arbolCanvas) {
+            let escala = 1;
+            let x = 18;
+            let y = 18;
+            const minEscala = 0.45;
+            const maxEscala = 2.2;
+            let arrastrando = false;
+            let inicioX = 0;
+            let inicioY = 0;
+
+            function aplicarTransformacion() {
+                // always fetch current canvas reference (update even if previous reference exists)
+                arbolCanvas = document.getElementById("arbol-canvas");
+                if (!arbolCanvas) return;
+                arbolCanvas.style.transform = "translate(" + x + "px, " + y + "px) scale(" + escala + ")";
+                if (btnZoomReset) {
+                    btnZoomReset.textContent = Math.round(escala * 100) + "%";
+                }
+                // Redraw connectors after transform (pan/zoom)
+                if (typeof drawConnectors === "function") drawConnectors();
+            }
+
+            function cambiarEscala(nuevaEscala, cx, cy) {
+                const limitada = Math.max(minEscala, Math.min(maxEscala, nuevaEscala));
+                const puntoX = (cx - x) / escala;
+                const puntoY = (cy - y) / escala;
+                escala = limitada;
+                x = cx - puntoX * escala;
+                y = cy - puntoY * escala;
+                aplicarTransformacion();
+            }
+
+            arbolWrap.addEventListener("wheel", function (evento) {
+                evento.preventDefault();
+                const rect = arbolWrap.getBoundingClientRect();
+                const cx = evento.clientX - rect.left;
+                const cy = evento.clientY - rect.top;
+                const delta = evento.deltaY < 0 ? 1.1 : 0.9;
+                cambiarEscala(escala * delta, cx, cy);
+            }, { passive: false });
+
+            arbolWrap.addEventListener("mousedown", function (evento) {
+                if (evento.button !== 0) {
+                    return;
+                }
+                if (evento.target.closest(".zoom-btn")) {
+                    return;
+                }
+                arrastrando = true;
+                inicioX = evento.clientX - x;
+                inicioY = evento.clientY - y;
+                arbolWrap.classList.add("arrastrando");
+            });
+
+            window.addEventListener("mousemove", function (evento) {
+                if (!arrastrando) {
+                    return;
+                }
+                x = evento.clientX - inicioX;
+                y = evento.clientY - inicioY;
+                aplicarTransformacion();
+            });
+
+            window.addEventListener("mouseup", function () {
+                arrastrando = false;
+                arbolWrap.classList.remove("arrastrando");
+            });
+
+            if (btnZoomIn) {
+                btnZoomIn.addEventListener("click", function () {
+                    cambiarEscala(escala * 1.14, arbolWrap.clientWidth / 2, arbolWrap.clientHeight / 2);
+                });
+            }
+
+            if (btnZoomOut) {
+                btnZoomOut.addEventListener("click", function () {
+                    cambiarEscala(escala * 0.88, arbolWrap.clientWidth / 2, arbolWrap.clientHeight / 2);
+                });
+            }
+
+            if (btnZoomReset) {
+                btnZoomReset.addEventListener("click", function () {
+                    escala = 1;
+                    x = 18;
+                    y = 18;
+                    aplicarTransformacion();
+                });
+            }
+
+            // --- SVG connectors: draw diagonal curves between parent and child nodes ---
+            // Use globals so we can redraw after AJAX updates
+            window._svgConnectors = window._svgConnectors || null;
+            window._treeMO = window._treeMO || null;
+
+            function ensureSvg() {
+                if (!arbolCanvas) arbolCanvas = document.getElementById("arbol-canvas");
+                if (!arbolCanvas) return null;
+                if (window._svgConnectors && arbolCanvas.contains(window._svgConnectors)) return window._svgConnectors;
+                if (window._svgConnectors && window._svgConnectors.parentNode) {
+                    window._svgConnectors.parentNode.removeChild(window._svgConnectors);
+                }
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                svg.classList.add("connectors");
+                svg.setAttribute("aria-hidden", "true");
+                arbolCanvas.insertBefore(svg, arbolCanvas.firstChild);
+                window._svgConnectors = svg;
+                return svg;
+            }
+
+            function clearSvg() {
+                const svg = window._svgConnectors;
+                if (!svg) return;
+                while (svg.firstChild) svg.removeChild(svg.firstChild);
+            }
+
+            function drawConnectors() {
+                // always refresh reference to the live #arbol-canvas element
+                arbolCanvas = document.getElementById("arbol-canvas");
+                if (!arbolCanvas) return;
+                const svg = ensureSvg();
+                if (!svg) return;
+                clearSvg();
+                const canvasRect = arbolCanvas.getBoundingClientRect();
+                svg.setAttribute("width", canvasRect.width);
+                svg.setAttribute("height", canvasRect.height);
+                svg.setAttribute("viewBox", `0 0 ${canvasRect.width} ${canvasRect.height}`);
+
+                // ensure arrow marker
+                if (!svg.querySelector('marker#arrow')) {
+                    const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+                    const marker = document.createElementNS('http://www.w3.org/2000/svg','marker');
+                    marker.setAttribute('id','arrow');
+                    marker.setAttribute('markerWidth','8');
+                    marker.setAttribute('markerHeight','8');
+                    marker.setAttribute('refX','6');
+                    marker.setAttribute('refY','3');
+                    marker.setAttribute('orient','auto');
+                    const arrowPath = document.createElementNS('http://www.w3.org/2000/svg','path');
+                    arrowPath.setAttribute('d','M0,0 L6,3 L0,6 L2,3 z');
+                    arrowPath.setAttribute('fill','#e63946');
+                    marker.appendChild(arrowPath);
+                    defs.appendChild(marker);
+                    svg.appendChild(defs);
+                }
+
+                const parents = arbolCanvas.querySelectorAll('.tn');
+                parents.forEach(parent => {
+                    const kidsContainer = parent.querySelector('.tn-kids');
+                    if (!kidsContainer) return;
+                    const parentLabel = parent.querySelector('.nodo-c');
+                    if (!parentLabel) return;
+                    const pRect = parentLabel.getBoundingClientRect();
+                    const x1 = pRect.left + pRect.width / 2 - canvasRect.left;
+                    const y1 = pRect.top + pRect.height - canvasRect.top;
+
+                    const kidNodes = Array.from(kidsContainer.querySelectorAll(':scope > .tn-kid'));
+                    kidNodes.forEach(kidWrap => {
+                        const kidLabel = kidWrap.querySelector('.nodo-c');
+                        if (!kidLabel) return;
+                        const cRect = kidLabel.getBoundingClientRect();
+                        const x2 = cRect.left + cRect.width / 2 - canvasRect.left;
+                        const y2 = cRect.top - canvasRect.top;
+
+                        const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+                        // use a short vertical handle so curves are not too wide
+                        const dy = Math.max(18, (y2 - y1) * 0.45);
+                        const d = `M ${x1} ${y1} C ${x1} ${y1 + dy} ${x2} ${y2 - dy} ${x2} ${y2}`;
+                        path.setAttribute('d', d);
+                        path.setAttribute('fill', 'none');
+                        path.setAttribute('stroke', '#e63946');
+                        path.setAttribute('stroke-width', '3');
+                        path.setAttribute('stroke-linecap', 'round');
+                        path.setAttribute('marker-end', 'url(#arrow)');
+                        svg.appendChild(path);
+                    });
+                });
+
+                // (re)attach mutation observer to redraw when DOM changes
+                if (window._treeMO) {
+                    try { window._treeMO.disconnect(); } catch (e) {}
+                    window._treeMO = null;
+                }
+                window._treeMO = new MutationObserver(() => drawConnectors());
+                window._treeMO.observe(arbolCanvas, { childList: true, subtree: true });
+            }
+
+            // redraw on resize
+            window.addEventListener('resize', drawConnectors);
+
+            // also redraw after initial transform and when panning
+            aplicarTransformacion();
+            drawConnectors();
+
+            // Intercept form submit to do an AJAX POST and update the resultados + arbol without full reload
+            const form = document.getElementById('form-analizador');
+            if (form) {
+                form.addEventListener('submit', function (ev) {
+                    ev.preventDefault();
+                    const data = new FormData(form);
+                    fetch(form.action || '/', { method: 'POST', body: data })
+                        .then(r => r.text())
+                        .then(html => {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html, 'text/html');
+                            const nuevosResultados = doc.querySelector('.resultados');
+                            const nuevoArbol = doc.querySelector('#arbol-canvas');
+                            if (nuevosResultados) {
+                                const cont = document.querySelector('.resultados');
+                                if (cont) cont.replaceWith(nuevosResultados.cloneNode(true));
+                            }
+                            if (nuevoArbol) {
+                                const cont2 = document.getElementById('arbol-canvas');
+                                if (cont2) cont2.replaceWith(nuevoArbol.cloneNode(true));
+                            }
+                            // reinitialize token delays and redraw connectors
+                            initTokenDelays();
+                            // small timeout to allow layout
+                            setTimeout(() => {
+                                // update references
+                                drawConnectors();
+                            }, 40);
+                        })
+                        .catch(err => {
+                            console.error('Error al analizar (AJAX):', err);
+                            form.submit(); // fallback
+                        });
+                });
+            }
+        }
+    </script>
+</body>
+</html>
